@@ -1,9 +1,14 @@
 package com.example.mozilla_downloader;
 
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.support.annotation.RequiresApi;
+import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
@@ -30,9 +35,7 @@ import static android.view.View.INVISIBLE;
 import static android.view.View.VISIBLE;
 
 public class MainActivity extends AppCompatActivity {
-
-    String url2 = "https://www.nord.com/cms/media/documents/bw/G1011_60Hz_US_1103.pdf";
-    String url1 = "https://www.hrw.org/sites/default/files/reports/wr2010_0.pdf";
+    String url1 = "https://www.hrw.org/sites/default/files/reports/wr2010_0.pdf";//download url
     Button p1;
     TextView title1,status1;
     DownloadTask downloadTask1;
@@ -52,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
         downloadTask1 = new DownloadTask();
         downloadTask1.checkState();
     }
-    class DownloadTask extends AsyncTask<String,Integer,String>
+    class DownloadTask extends AsyncTask<String,Integer,String>//asynctask which handles HttpURLConnection
     {
         @Override
         protected void onPreExecute(){
@@ -73,13 +76,13 @@ public class MainActivity extends AppCompatActivity {
             int length = 0;
             try {
                 URL url = new URL(path);
-                HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+                HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();//connection opened
                 File newF = new File("sdcard/mozilladownload");
                 if (!newF.exists()) {
                     newF.mkdir();
                 }
                 File inp = new File(newF, "download1.pdf");
-                if(inp.exists())
+                if(inp.exists())//pre-existing file,checked for resuming download
                 {
                     long size = inp.length();
                     urlConnection.setRequestProperty("Range", "bytes="+size+"-");
@@ -88,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
                     progressBar1.setProgress((int)size*100/length);
                     total = size;
                 }
-                else
+                else//no pre-existing download
                 {
                     urlConnection.connect();
                     length = urlConnection.getContentLength();
@@ -100,9 +103,9 @@ public class MainActivity extends AppCompatActivity {
                  outputStream = new FileOutputStream(inp);
                 while ((count = inputStream.read(data)) != -1)
                 {
-                    if(isCancelled())
+                    if(isCancelled())//cancel trigger handling for download cancellation
                     {   status1.setText("CANCELLED...");
-                        if(flag==2)
+                        if(flag==2)//deletion of incomplete download in case of cancelled download(flag = 2),flag=1->paused
                         inp.delete();
                         inputStream.close();
                         outputStream.close();
@@ -129,7 +132,8 @@ public class MainActivity extends AppCompatActivity {
 
         }
 
-        public void checkState() {
+        public void checkState()
+        {
             File newF = new File("sdcard/mozilladownload");
             File inp = new File(newF, "download1.pdf");
             if(inp.exists())
@@ -139,25 +143,28 @@ public class MainActivity extends AppCompatActivity {
                 progressBar1.setVisibility(INVISIBLE);
             }
         }
-
-        public void canceldelete(){
-            File newF = new File("sdcard/mozilladownload");
-            File inp = new File(newF, "download1.pdf");
-            if(inp.delete())
-            status1.setText("hrllo");
-        }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)//to check battery percentage
     public void start1(View view)
     {
         if(flag==0) {
             BatteryManager bm = (BatteryManager) getSystemService(BATTERY_SERVICE);
             int batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
-            if (batLevel < 20) {
+            if (batLevel < 20) //if battery level < 20, download is not possible
+            {
                 Toast.makeText(MainActivity.this, "There current battery level is " + Integer.toString(batLevel) + ". Please charge your phone and retry!", Toast.LENGTH_LONG).show();
                 return;
             }
+            Intent intent = new Intent(this,MainActivity.class);
+            PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+                    .setSmallIcon(R.drawable.ic_launcher_background)
+                    .setContentIntent(pendingIntent)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+            NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            builder.setContentTitle("Download Started");
+            mNotificationManager.notify(001, builder.build());
             p1.setText("PAUSE");
             flag=1;
             progressBar1.setVisibility(VISIBLE);
@@ -166,16 +173,33 @@ public class MainActivity extends AppCompatActivity {
         else
             if(flag==1)
             {
+                Intent intent = new Intent(this,MainActivity.class);
+                PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+                        .setSmallIcon(R.drawable.ic_launcher_background)
+                        .setContentIntent(pendingIntent)
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                builder.setContentTitle("Download Paused");
+                mNotificationManager.notify(001, builder.build());
                 downloadTask1.cancel(true);
             }
     }
     public void cancel1(View view)
     {
+        Intent intent = new Intent(this,MainActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+                .setSmallIcon(R.drawable.ic_launcher_background)
+                .setContentIntent(pendingIntent)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+        NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        builder.setContentTitle("Download Cancelled");
         Toast.makeText(MainActivity.this,"DOWNLOAD CANCELLED",Toast.LENGTH_LONG).show();
         flag=2;
         downloadTask1.cancel(true);
 
     }
-    
+
 
 }
