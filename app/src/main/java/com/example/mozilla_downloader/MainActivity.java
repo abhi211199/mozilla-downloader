@@ -1,12 +1,18 @@
 package com.example.mozilla_downloader;
 
+import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.media.MediaPlayer;
 import android.os.AsyncTask;
 import android.os.BatteryManager;
 import android.os.Build;
+import android.os.Environment;
+import android.os.SystemClock;
+import android.provider.Settings;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -15,6 +21,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.TimePicker;
 import android.widget.Toast;
 
 import org.w3c.dom.Text;
@@ -29,13 +36,19 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.Calendar;
+import java.util.concurrent.Executor;
+
+import javax.net.ssl.HttpsURLConnection;
 
 import static android.view.View.GONE;
 import static android.view.View.INVISIBLE;
 import static android.view.View.VISIBLE;
 
+
 public class MainActivity extends AppCompatActivity {
     String url1 = "https://www.hrw.org/sites/default/files/reports/wr2010_0.pdf";//download url
+    String url2 = "http://kmmc.in/wp-content/uploads/2014/01/lesson2.pdf";//download url
     Button p1;
     TextView title1,status1;
     DownloadTask downloadTask1;
@@ -44,10 +57,12 @@ public class MainActivity extends AppCompatActivity {
     InputStream inputStream;
     Integer flag = 0;
     long total = 0,length = 0;
+    TimePicker timePicker;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        timePicker = findViewById(R.id.ti1me);
         progressBar1 = (ProgressBar)findViewById(R.id.pbar1);
         title1 = (TextView)findViewById(R.id.title1);
         status1 = (TextView)findViewById(R.id.status1);
@@ -55,10 +70,12 @@ public class MainActivity extends AppCompatActivity {
         downloadTask1 = new DownloadTask();
         downloadTask1.checkState();
     }
+
     class DownloadTask extends AsyncTask<String,Integer,String>//asynctask which handles HttpURLConnection
     {
         @Override
         protected void onPreExecute(){
+            progressBar1.setProgress(0);
             status1.setText("DOWNLOADING...");
             title1.setText("download1.pdf");
         }
@@ -70,6 +87,7 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(String result) {
             Toast.makeText(MainActivity.this,"DownloadTask1" + result,Toast.LENGTH_LONG).show();
         }
+        @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
         @Override
         protected String doInBackground(String... params) {
             String path = params[0];
@@ -77,7 +95,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 URL url = new URL(path);
                 HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();//connection opened
-                File newF = new File("sdcard/mozilladownload");
+                File newF = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),"mozilladownload");
                 if (!newF.exists()) {
                     newF.mkdir();
                 }
@@ -103,6 +121,13 @@ public class MainActivity extends AppCompatActivity {
                  outputStream = new FileOutputStream(inp);
                 while ((count = inputStream.read(data)) != -1)
                 {
+                    BatteryManager bm = (BatteryManager)getSystemService(BATTERY_SERVICE);
+                    int batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+                    if (batLevel < 20) //if battery level < 20, download is not possible
+                    {
+//                        Toast.makeText(MainActivity.this, "There current battery level is " + Integer.toString(batLevel) + ". Please charge your phone and retry!", Toast.LENGTH_LONG).show();
+                        return "Download Cancelled due to low battery";
+                    }
                     if(isCancelled())//cancel trigger handling for download cancellation
                     {   status1.setText("CANCELLED...");
                         if(flag==2)//deletion of incomplete download in case of cancelled download(flag = 2),flag=1->paused
@@ -158,10 +183,14 @@ public class MainActivity extends AppCompatActivity {
             }
             Intent intent = new Intent(this,MainActivity.class);
             PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+            Intent broad=new Intent(this,alarm.class);
+            PendingIntent act=PendingIntent.getBroadcast(this, 0, broad,PendingIntent.FLAG_UPDATE_CURRENT);
             NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
                     .setSmallIcon(R.drawable.ic_launcher_background)
                     .setContentIntent(pendingIntent)
-                    .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .addAction(R.mipmap.ic_launcher,"PAUSE/RESUME",act)
+                    .addAction(R.mipmap.ic_launcher,"CANCEL",act);
             NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             builder.setContentTitle("Download Started");
             mNotificationManager.notify(001, builder.build());
@@ -201,5 +230,35 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    public void al(View view)
+    {
+        Calendar calendar=Calendar.getInstance();
+        calendar.set(Calendar.HOUR_OF_DAY,timePicker.getHour());
+        calendar.set(Calendar.MINUTE,timePicker.getMinute());
+        calendar.set(Calendar.SECOND,0);
+        Calendar calendar1=Calendar.getInstance();
+        Long current = calendar1.getTimeInMillis();
+        Long sett = calendar.getTimeInMillis();
+        al1(((sett-current)));//calendar.getTimeInMillis() will time in form of epoch milliseconds.
+    }
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    public void al1(long timein)
+    {
+        Toast.makeText(MainActivity.this, Long.toString(timein),Toast.LENGTH_SHORT).show();
+        AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(MainActivity.this, alarm.class);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(this,0  ,intent,0);
+        alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime()+timein,pendingIntent);
+    }
+
+    public void stat12(View view)
+    {
+//        new DownloadTask().execute(url1);
+//        new DownloadTask().execute(url2);
+        new DownloadTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR,url1);
+    }
 
 }
+
+
+ 
